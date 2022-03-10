@@ -21,8 +21,12 @@ main(int argc, char **argv)
     string out_dir      = std::get<string>(Parser.get(Options::OPT_OUTPUT_DIR      ));
     string image_name   = std::get<string>(Parser.get(Options::OPT_IMAGE_NAME      ));
     string mls_map_path = std::get<string>(Parser.get(Options::OPT_MLSMAP_PATH     ));
+    string mode         = std::get<string>(Parser.get(Options::OPT_MODE            ));
     bool   enb_lc       = std::get<bool  >(Parser.get(Options::OPT_ENB_LIGHT_COMPEN));
     bool   enb_ra       = std::get<bool  >(Parser.get(Options::OPT_ENB_REFINE_ALIGN));
+
+    bool video_mode = true;
+    if (mode == "image") video_mode = false;
 
     // Video input 
     cv::VideoCapture VCap( video_path );
@@ -48,13 +52,15 @@ main(int argc, char **argv)
 
     // Initialize an H264 encoder
     cv::VideoWriter VOut;
-    VOut.open( video_out_name, cv::VideoWriter::fourcc('X','2','6','4'),
-               frame_fps, cv::Size(Wd, Hd) );
-    if( !VOut.isOpened() )
-    {
-        CV_Error_(cv::Error::StsBadArg, 
-                  ("Error opening video: %s", video_out_name.c_str()));
-    } 
+    if (video_mode) {
+    	VOut.open( video_out_name, cv::VideoWriter::fourcc('X','2','6','4'),
+               	frame_fps, cv::Size(Wd, Hd) );
+    	if( !VOut.isOpened() )
+    	{
+        	CV_Error_(cv::Error::StsBadArg, 
+                  	("Error opening video: %s", video_out_name.c_str()));
+    	} 
+    }
 
     // Initialize our stitcher
     stitcher::FisheyeStitcher Stitcher(
@@ -113,9 +119,14 @@ main(int argc, char **argv)
 #if PROFILING
         double tickStart = endTime; // previous count
 #endif 
-        // Encoding
-        VOut << pano;
-
+	if (video_mode) {
+                // Encoding video
+        	VOut << pano;
+    	} else {
+		// Write a single image (jpg)
+		string filename = out_dir + "/" + image_name + ".jpg";
+		imwrite(filename,pano);
+	}
 #if PROFILING
         double tickEnd = static_cast<double>(cv::getTickCount());
         double runTime = (tickEnd - tickStart) / cv::getTickFrequency();
@@ -131,10 +142,11 @@ main(int argc, char **argv)
     totalTime = (endTime - startTime) / cv::getTickFrequency();
 
     VCap.release();
-    VOut.release();
-
-    std::cout << "Done! Writing to video [" << Wd << "x" << Hd << "] @" 
-              << frame_fps << "fps  --> " << video_out_name << "\n";
+    if (video_mode) {
+		VOut.release(); 
+    		std::cout << "Done! Writing to video [" << Wd << "x" << Hd << "] @" 
+              		  << frame_fps << "fps  --> " << video_out_name << "\n";
+    }
 
     // Timer printout
     std::cout << "Total time = " << totalTime / 60 << " min" 
